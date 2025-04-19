@@ -2,26 +2,30 @@
   "name": "eslint-plugin-zod2",
   "version": "0.0.1",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.js"
     }
   },
   "homepage": "https://github.com/hanayashiki/eslint-plugin-zod2",
   "repository": "https://github.com/hanayashiki/eslint-plugin-zod2",
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "test": "node --import ./test/setup.js --test"
   },
   "devDependencies": {
     "@typescript-eslint/experimental-utils": "5.62.0",
     "@typescript-eslint/rule-tester": "^8.30.1",
-    "@typescript-eslint/utils": "8.30.1",
     "eslint": "^9.25.0",
+    "tsup": "^8.4.0",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@typescript-eslint/utils": "^8.30.1"
   },
   "peerDependencies": {
     "eslint": "^9.25.0"
