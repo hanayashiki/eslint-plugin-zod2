@@ -52,4 +52,51 @@ export const Schema = z.object({});
 export type Schema = z.infer<typeof Schema>;
 ```
 
-The rule respects your semicolon style and supports multiple schemas per file.
+
+### Option: excludeNameRegex
+
+Suppose you want to exclude all schema names that start with an underscore from requiring a type export. You can use the `excludeNameRegex` option:
+
+```json
+{
+  "rules": {
+    "zod2/export-zod-type": ["error", {
+      "excludeNameRegex": "^_"
+    }]
+  }
+}
+```
+
+Now, the following is allowed:
+
+```ts
+export const _Internal = z.object({});
+// No type export required for _Internal
+```
+
+### Option: customZodSchemaBuilders
+
+Suppose you have a custom function `myZodSchema` that returns a Zod schema:
+
+```ts
+export const MySchema = myZodSchema({});
+```
+
+By default, the rule does not recognize `myZodSchema` as a Zod schema builder. To enforce type export for this, add it to `customZodSchemaBuilders`:
+
+```json
+{
+  "rules": {
+    "zod2/export-zod-type": ["error", {
+      "customZodSchemaBuilders": ["myZodSchema"]
+    }]
+  }
+}
+```
+
+Now, the following will be required:
+
+```ts
+export const MySchema = myZodSchema({});
+export type MySchema = z.infer<typeof MySchema>;
+```

@@ -16,6 +16,15 @@ tester.run('export-zod-type', rule, {
     `
       export const a = 1;
     `,
+    {
+      code: `export const Excluded = z.object({});`,
+      options: [
+        {
+          excludeNameRegex: 'Excluded',
+          customZodSchemaBuilders: [],
+        },
+      ],
+    },
   ],
   invalid: [
     {
@@ -48,7 +57,7 @@ tester.run('export-zod-type', rule, {
     },
     {
       name: 'insert multiple types',
-      code: `export const A = z.enum([]);export const B = z.enum([]);`,
+      code: `export const A = z.enum([]);\nexport const B = z.enum([]);`,
       errors: [
         {
           messageId: 'export-zod-type',
@@ -58,6 +67,21 @@ tester.run('export-zod-type', rule, {
         },
       ],
       output: `export const A = z.enum([]);\nexport type A = z.infer<typeof A>;\nexport const B = z.enum([]);\nexport type B = z.infer<typeof B>;`,
+    },
+    {
+      code: `export const Schema = result()`,
+      options: [
+        {
+          excludeNameRegex: '',
+          customZodSchemaBuilders: ['result'],
+        },
+      ],
+      errors: [
+        {
+          messageId: 'export-zod-type',
+        },
+      ],
+      output: `export const Schema = result()\nexport type Schema = z.infer<typeof Schema>`,
     },
   ],
 });

@@ -5,21 +5,38 @@ const createRule = ESLintUtils.RuleCreator(() => '');
 /**
  * Find pattern like `z.object({}).partial().partial()...`
  */
-const isZodSchema = (expression: TSESTree.Expression): boolean => {
+const isZodSchema = (
+  expression: TSESTree.Expression,
+  customZodSchemaBuilders: string[],
+): boolean => {
   if (expression.type === AST_NODE_TYPES.CallExpression) {
     const callee = expression.callee;
     // Check the outer `z.object({}).partial()`
+    if (
+      callee.type === AST_NODE_TYPES.Identifier &&
+      customZodSchemaBuilders.includes(callee.name)
+    ) {
+      return true;
+    }
+
     if (callee.type === AST_NODE_TYPES.MemberExpression) {
       if (callee.object.type === AST_NODE_TYPES.Identifier && callee.object.name === 'z') {
         return true;
       }
 
       // Try the inner maybe `z.object({})`
-      return isZodSchema(callee.object);
+      return isZodSchema(callee.object, customZodSchemaBuilders);
     }
   }
   return false;
 };
+
+type Options = [
+  {
+    excludeNameRegex?: string;
+    customZodSchemaBuilders?: string[];
+  },
+];
 
 const exportZodType = createRule({
   name: 'export-zod-type',
@@ -29,20 +46,41 @@ const exportZodType = createRule({
         'If `export const Schema = ...` is used, there should be `export type Schema = z.infer<typeof Schema>`',
     },
     messages: {
-      'export-zod-type':
-        'If `export const Schema = ...` is used, there should be `export type Schema = z.infer<typeof Schema>`',
+      'export-zod-type': 'Missing `export type Schema = z.infer<typeof Schema>`',
     },
     type: 'suggestion',
-    schema: [],
+    schema: [
+      {
+        type: 'object',
+        properties: {
+          excludeNameRegex: { type: 'string' },
+          customZodSchemaBuilders: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
     fixable: 'code',
   },
-  defaultOptions: [],
-  create(context) {
+  defaultOptions: [
+    {
+      excludeNameRegex: '',
+      customZodSchemaBuilders: [],
+    } as Options[0],
+  ],
+  create(context, options) {
     const { sourceCode } = context;
-
+    const { excludeNameRegex, customZodSchemaBuilders = [] } = options[0];
     return {
       Program(programNode) {
-        const zodSchemas: { name: string; node: TSESTree.Node }[] = [];
+        const zodSchemas: {
+          name: string;
+          node: TSESTree.Node;
+          hasSemicolon: boolean;
+          fixAfter: TSESTree.Node | TSESTree.Token;
+        }[] = [];
         const expotedTypes = new Set<string>();
 
         for (const statement of programNode.body) {
@@ -54,11 +92,25 @@ const exportZodType = createRule({
                 (declaration) =>
                   declaration.id.type === AST_NODE_TYPES.Identifier &&
                   declaration.init &&
-                  isZodSchema(declaration.init),
+                  isZodSchema(declaration.init, customZodSchemaBuilders),
               )) {
+                const name = (zodSchemaNode.id as TSESTree.Identifier).name;
+                if (excludeNameRegex && new RegExp(excludeNameRegex).test(name)) {
+                  continue;
+                }
+
+                const lastToken = sourceCode.getTokenAfter(zodSchemaNode);
+                const hasSemicolon =
+                  lastToken !== null &&
+                  lastToken.type === AST_TOKEN_TYPES.Punctuator &&
+                  lastToken.value === ';';
+                const fixAfter = hasSemicolon ? lastToken : zodSchemaNode;
+
                 zodSchemas.push({
                   name: (zodSchemaNode.id as TSESTree.Identifier).name,
-                  node: zodSchemaNode,
+                  node: zodSchemaNode.id,
+                  hasSemicolon,
+                  fixAfter,
                 });
               }
             }
@@ -69,21 +121,14 @@ const exportZodType = createRule({
           }
         }
 
-        for (const { name, node } of zodSchemas) {
+        for (const { name, node, hasSemicolon, fixAfter } of zodSchemas) {
           if (!expotedTypes.has(name)) {
             context.report({
               node,
               messageId: 'export-zod-type',
               fix(fixer) {
-                const lastToken = sourceCode.getTokenAfter(node);
-                const hasSemicolon =
-                  lastToken &&
-                  lastToken.type === AST_TOKEN_TYPES.Punctuator &&
-                  lastToken.value === ';';
-                const target = hasSemicolon ? lastToken : node;
-
                 return fixer.insertTextAfter(
-                  target,
+                  fixAfter,
                   `\nexport type ${name} = z.infer<typeof ${name}>${hasSemicolon ? ';' : ''}`,
                 );
               },
